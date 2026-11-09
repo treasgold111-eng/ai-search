@@ -12,11 +12,13 @@ def home():
 @app.route("/ask", methods=["POST"])
 def ask():
     question = (request.json or {}).get("question", "").strip()
+    question = question.strip('"\'“”')
     if not question:
         return jsonify(answer="Please type a question.", sources=[])
     try:
         results = DDGS().text(question, max_results=6)
-    except Exception:
+    except Exception as e:
+        print("SEARCH ERROR:", repr(e), flush=True)
         results = []
     if not results:
         return jsonify(answer="I couldn't find sources for that. Try rephrasing.", sources=[])
@@ -34,7 +36,8 @@ def ask():
             model="gemini-flash-latest", contents=prompt
         )
         answer = resp.text
-    except Exception:
+    except Exception as e:
+        print("GEMINI ERROR:", repr(e), flush=True)
         answer = "The AI is busy right now. Please try again in a minute."
     sources = [{"url": r["href"], "title": r["title"]} for r in results]
     return jsonify(answer=answer, sources=sources)
