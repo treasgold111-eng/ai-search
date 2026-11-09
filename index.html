@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Search</title>
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; }
+    input { width: 100%; padding: 12px; font-size: 16px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
+    #answer { white-space: pre-wrap; margin-top: 20px; line-height: 1.5; }
+    #sources a { display: block; margin-top: 6px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>AI Search</h1>
+  <input id="q" placeholder="Ask anything...">
+  <button onclick="ask()">Search</button>
+  <div id="answer"></div>
+  <div id="sources"></div>
+
+  <script>
+    async function ask() {
+      const q = document.getElementById("q").value;
+      const answerEl = document.getElementById("answer");
+      const sourcesEl = document.getElementById("sources");
+      answerEl.textContent = "Searching...";
+      sourcesEl.innerHTML = "";
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        answerEl.textContent = data.answer;
+        if (data.sources.length) {
+          sourcesEl.innerHTML = "<h3>Sources</h3>" +
+            data.sources.map(s => `<a href="${s.url}" target="_blank">${s.title}</a>`).join("");
+        }
+      } catch (e) {
+        answerEl.textContent = "Something went wrong. Try again.";
+      }
+    }
+  </script>
+</body>
+</html>
