@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory
-import anthropic
+from ddgs import DDGS
+from google import genai
 
 app = Flask(__name__)
-client = anthropic.Anthropic()
+client = genai.Client()  # reads GEMINI_API_KEY
 
 @app.route("/")
 def home():
@@ -10,22 +11,30 @@ def home():
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    question = request.json.get("question", "")
-    response = client.messages.create(
-        model="claude-sonnet-5-5",
-        max_tokens=1500,
-        system="Answer using web search. Be accurate. "
-               "If you can't verify something, say so.",
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": question}],
+    question = (request.json or {}).get("question", "").strip()
+    if not question:
+        return jsonify(answer="Please type a question.", sources=[])
+    try:
+        results = DDGS().text(question, max_results=6)
+    except Exception:
+        results = []
+    if not results:
+        return jsonify(answer="I couldn't find sources for that. Try rephrasing.", sources=[])
+
+    context = "\n\n".join(
+        f"[{i+1}] {r['title']}\n{r['body']}" for i, r in enumerate(results)
     )
-    answer, sources = "", {}
-    for block in response.content:
-        if block.type == "text":
-            answer += block.text
-            for c in (getattr(block, "citations", None) or []):
-                sources[c.url] = c.title
-    return jsonify(
-        answer=answer,
-        sources=[{"url": u, "title": t} for u, t in sources.items()],
+    prompt = (
+        "Answer the question using ONLY the sources below. "
+        "If they don't contain the answer, say you're not sure.\n\n"
+        f"Sources:\n{context}\n\nQuestion: {question}"
     )
+    try:
+        resp = client.models.generate_content(
+            model="gemini-flash-latest", contents=prompt
+        )
+        answer = resp.text
+    except Exception:
+        answer = "The AI is busy right now. Please try again in a minute."
+    sources = [{"url": r["href"], "title": r["title"]} for r in results]
+    return jsonify(answer=answer, sources=sources)
